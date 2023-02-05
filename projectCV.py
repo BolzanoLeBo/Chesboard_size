@@ -88,30 +88,36 @@ def line_coord_change(r, theta) :
 	x2 = int(x0 + 1000*b)
 	y2 = int(y0 - 1000*a)
 
-	return [(x1,y1), (x2,y2)]
+	return [x1,y1, x2,y2]
 
 
 
-def lines_detector(source_img, img_edge, tresh) :
+def lines_detector(img_edge, tresh) :
 	
-	img = np.copy(source_img)
+	line_tab = []
+	line_tab.append([1,1,0,0])
+
 	lines = cv.HoughLines(img_edge, 1, pi/180, tresh)
 	
 	for r_theta in lines : 
 		arr = np.array(r_theta[0], dtype=np.float64)
 		r, theta = arr
 		line_coord = line_coord_change(r, theta)
-		
-		cv.line(img, line_coord[0], line_coord[1], (0,0,255), 1)
+		copy = False
+		for line in line_tab :
+			if lines_close(line_coord, line) : 
+				copy = True 
+		if not copy:			
+			line_tab.append(line_coord)
 
-	return img
+	return line_tab
 
 
 
-def lines_detector_P(source_img, img_edge, tresh, min_Length, max_Gap, line_tab) : 
+def lines_detector_P(img_edge, tresh, min_Length, max_Gap) : 
 	#Use a different dfonction for detecing lines 
-	#WARNING modify the line_tab variable
-	img = np.copy(source_img)
+	
+	line_tab = []
 	lines = cv.HoughLinesP(
 			img_edge, # Input edge image
 			1, # Distance resolution in pixels
@@ -123,10 +129,13 @@ def lines_detector_P(source_img, img_edge, tresh, min_Length, max_Gap, line_tab)
 
 	for point in lines : 
 		x1,y1,x2,y2=point[0]
-		cv.line(img, (x1,y1), (x2,y2), (0,0,255), 2)
-		line_tab.append(point[0])
-
-	return img
+		copy = False
+		for line in line_tab : 
+			if lines_close([x1,y1,x2,y2], line) : 
+				copy = True 
+		if not copy:
+			line_tab.append([x1, y1, x2, y2])
+	return line_tab		
 
 
 
@@ -134,7 +143,7 @@ def average_color(img):
 #get the average color of the image 
 	return np.sum(img)/(np.shape(img)[0]*np.shape(img)[1]) 
 
-def remove_in_spectrum(xcenter, ycenter, r, mag, ang) : 
+def remove_in_spectrum(xcenter, ycenter, r, mag) : 
 	#remove a circle in the spectrum
 	xshape = mag.shape[1]
 	yshape = mag.shape[0]
@@ -157,60 +166,110 @@ def remove_in_spectrum_out(xcenter, ycenter, r, mag, ang) :
 				mag[y][x] = 0
 				ang[y][x] = 0
 
+def remove_sinusoidal_noise(img):
+	# Convert the image to a 2D numpy array
+	img = np.array(img)
+
+	# Apply the FFT to the image
+	f = np.fft.fft2(img)
+
+	# Shift the zero-frequency component to the center
+	fshift = np.fft.fftshift(f)
+
+	#To see if components were removed
+	removed = False 
+
+	# Get the rows and columns of the image
+	rows, cols = img.shape
+
+	 # Set the noise-removal threshold for the other frequency components
+	other_freq_threshold = 1000 * average_color(np.abs(fshift))
 
 
-def remove_periodic_noise(img): 
-	
-	#Do the fourier transform
-	dft = np.fft.fft2(img)
-	dft_shift = np.fft.fftshift(dft)
+	 # Zero out the high-frequency components that correspond to noise
+	for y in range(rows):
+		for x in range(cols):
+			if not (y == rows//2 and x == cols//2):
+				if np.abs(fshift[y][x]) > other_freq_threshold:
+					fshift[y][x] = 0
+					removed = True
 
-	mag = np.abs(dft_shift)
-	ang = np.angle(dft_shift)
+	# Shift the zero-frequency component back to the original location
+	f_ishift = np.fft.ifftshift(fshift)
 
+	# Apply the inverse FFT to the filtered image
+	img_back = np.fft.ifft2(f_ishift)
 
-	#find local maxima 
-	maxima = (mag == maximum_filter(mag,70))
-	ymax, xmax = np.where(maxima)
-	print(ymax, xmax)
-
-	#center of the image
-	xcenter = mag.shape[1]/2
-	ycenter = mag.shape[0]/2
-
-
-	#remove the frequency which do the noise
-	for i in range (0, len(ymax)) : 
-		x = xmax[i]
-		y = ymax[i]
-		if 2*(x - xcenter)**2 + 2*(y - ycenter)**2 >= 5**2 : 
-			remove_in_spectrum(x, y, 25, mag, ang) 
-
-	"""y1, x1, y2, x2 = ymax[0], xmax[0], ymax[2], xmax[2]
-	t = 30
-	remove_in_spectrum(x1, y1, t, mag)
-	remove_in_spectrum(x2, y2, t, mag)"""
+	# Convert the result back to an 8-bit unsigned integer
+	img_back = np.abs(img_back).astype(np.uint8)
+	return [img_back, removed]
 
 
-	#re-create the image
-	combined = np.multiply(mag, np.exp(1j*ang))
-	fftx = np.fft.ifftshift(combined)
-	ffty = np.fft.ifft2(fftx)
-	imgCombined = np.abs(ffty)
+def line_equation(line_points) : 
+	x1, y1, x2, y2 = line_points
+	if x1 == x2 :  #if it is a vertical line 
+		x1 += 0.0000001
 
-	f, axarr = plt.subplots(2,1) 
+	m = (y1 - y2) / (x1 - x2)
+	b = y1 - m* x1
+	return [m, b]
 
-	axarr[0].imshow(20*np.log(mag), cmap = 'gray')
-	axarr[1].imshow(imgCombined, cmap = 'gray')
-	plt.show()
+def in_image(x, y, img ) : 
+	lx = img.shape[1]
+	ly = img.shape[0]
+
+	return (x < lx and x > 0) and (y < ly and y > 0)
+ 
+def find_all_intersection(img, line_tab) : 
+	tab_intersect = []
+	for i in range (0, len(line_tab)) :
+		#we will find intersection between this line and all the others  
+		m1, b1 = line_equation(line_tab[i])
+		for j in range (i, len(line_tab)) : 
+			#equation for others lines
+			m2, b2 = line_equation(line_tab[j])
+			if (m1 - m2) != 0 : 
+				x = (b2 - b1) / (m1 - m2)
+				y = m1 * x + b1
+
+				if in_image(x, y, img) : 
+					copy = False
+					for point in tab_intersect : 
+						if point_close([x, y], point) : 
+							copy = True 
+					if not copy:
+						tab_intersect.append([x, y])
+	return tab_intersect
+
 
 
  # define a null callback function for Trackbar
 def null(x):
-     pass
+	 pass
 
+def point_close (p1, p2 ): 
+	treshold = 20
+	return sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2) < treshold
 
+def lines_close(l1, l2) :
+	
+	treshold1 = 10 #the distance between the two interesection with the y axis 
+	treshold2 = 35 #difference between the 
 
+	#equation for line 1
+	m1, b1 = line_equation(l1)
+
+	#equation for line 2
+	m2, b2 = line_equation(l2)
+
+	return abs(b1 - b2) < treshold1 and abs(m1 - m2) < treshold2
+
+def draw_lines(source_img, line_tab) : 
+	img = np.copy(source_img)
+	for line in line_tab : 
+		x1, y1, x2, y2 = line
+		cv.line(img, (x1, y1), (x2, y2), (0,0,255), 1)
+	return img
 
 
 
@@ -219,15 +278,30 @@ def main():
 	img = cv.imread(filename)
 	#img = cv.resize(img, (250,250) )
 
+	final_img = np.copy(img)
+
+	#create image with only gray variation 
+	gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
+
+	img_nosin, sin_removed = remove_sinusoidal_noise(gray)
+
 	#creation of the trackbars to change parameters 
 	cv.namedWindow('w')
-	cv.createTrackbar("gamma", "w", 3, 10, null)
+	
+
+	if not sin_removed : 
+		cv.createTrackbar("gamma", "w", 3, 10, null)
+		cv.createTrackbar("cannyMin", "w", 50, 100, null)
+		cv.createTrackbar("cannyMax", "w", 170, 200, null)
+	else : 
+		cv.createTrackbar("gamma", "w", 15, 50, null)
+		cv.createTrackbar("cannyMin", "w", 10, 100, null)
+		cv.createTrackbar("cannyMax", "w", 50, 200, null)
+
 	cv.createTrackbar("treshold", "w", 100, 255, null)
-	cv.createTrackbar("tresholdP", "w", 100, 255, null)
-	cv.createTrackbar("cannyMin", "w", 100, 255, null)
-	cv.createTrackbar("cannyMax", "w", 150, 255, null)
-	cv.createTrackbar("houghmin", "w", 75, 255, null)
-	cv.createTrackbar("houghmax", "w", 50, 255, null)
+	cv.createTrackbar("tresholdP", "w", 100, 150, null)
+	cv.createTrackbar("houghmin", "w", 50, 100, null)
+	cv.createTrackbar("houghmax", "w", 10, 50, null)
 
 	loop = True 
 	init = True 
@@ -242,6 +316,7 @@ def main():
 		#press L to load the changes in the parameters 
 		if key == ord('l') or init:
 			init = False 
+			
 			g = cv.getTrackbarPos('gamma','w')/10
 			tresh = cv.getTrackbarPos("treshold", "w")
 			treshP = cv.getTrackbarPos("tresholdP", "w")
@@ -255,23 +330,22 @@ def main():
 
 
 
-			final_img = np.copy(img)
-
-			#create image with only gray variation 
-			gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
 
 			
 			#remove noise
-			img_filt = cv.GaussianBlur(gray,(3,3),0)
+			if sin_removed : 
+				img_filt = cv.GaussianBlur(img_nosin,(3,3),0)
+			else :
+				img_filt = cv.GaussianBlur(gray,(3,3),0)
 
 			#change contrast and brightness 
-			img_contr = gamma_correction(img_filt, g) #0.3	
+
+			img_contr = gamma_correction(img_filt, g)
 
 			contour = contour_rehaussement(img_contr)
 
 			#only draw the edges 
-			img_edge = cv.Canny(contour, cmin, cmax, apertureSize=3) #100 125
-			
+			img_edge = cv.Canny(contour, cmin, cmax, apertureSize=3)
 
 			line_tab = []
 
@@ -283,9 +357,23 @@ def main():
 
 			cv.imshow('edges',img_edge)
 			
-			cv.imshow('lines', lines_detector(final_img, img_edge, tresh)) #100
-			cv.imshow('linesP', lines_detector_P(final_img, img_edge, hmin, hmax, treshP, line_tab)) #75 50 100
 			
+			line_tabP = lines_detector_P(img_edge, hmin, hmax, treshP)
+			line_tab = lines_detector(img_edge, tresh)
+
+			cv.imshow('lines', draw_lines(final_img, line_tab))
+			cv.imshow('linesP', draw_lines(final_img, line_tabP)) 
+
+			intersectP = find_all_intersection(final_img, line_tabP)
+			img2 = np.copy(final_img)
+			#
+			for point in intersectP : 
+				cv.circle(img2, (int(point[0]), int(point[1])), 5, (0,255,0), 3)
+			cv.imshow('img2', img2) 
+			print(len(intersectP), len(line_tab))
+
+			
+		
 
 
 

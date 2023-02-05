@@ -3,9 +3,10 @@
 Done
 - Detect lines with 2 Hough functions 
 - Parameter can be changed on a window 
+- Detect intersection of the lines 
+- periodic noise filter
 
 
 TO DO : 
-- Finish periodic noise remover 
 - Add salt and pepper noise filter 
-- Create function to combine lines to count them (I will do it) 
+- Find good parameters depending on the image
