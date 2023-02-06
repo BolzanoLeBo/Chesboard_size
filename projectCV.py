@@ -55,12 +55,27 @@ def linear_streching(gray_img, a_min, a_max) :
 #-------------------------------------------------------------------------------------------
 
 
-
 def gamma_correction(source_img, gamma) : 
 	img = np.copy(source_img)
-	img = (np.power((img/255), gamma)*255)
+	"""img = (np.power((img/255), gamma)*255)
 	img = img.astype(np.uint8)
-	return img
+	return img"""
+	lookUpTable = np.empty((1,256), np.uint8)
+	for i in range(256):
+		lookUpTable[0,i] = np.clip(pow(i / 255.0, 1.0 / gamma) * 255.0, 0, 255)
+	return cv.LUT(img, lookUpTable)
+
+def automatic_gamma_correction(img):
+	# Averaga and variance of the image 
+	mean, stddev = cv.meanStdDev(img)
+	mean = mean[0][0]/256
+	variance = stddev[0][0]/256
+	print(variance)
+	k=0.5
+	gamma = np.log(mean + k * variance) / np.log(0.5)
+
+	#gamma corrextion
+	return gamma_correction(img, gamma)
 
 def contour_rehaussement(source_img) : 
 	img = np.copy(source_img)
@@ -340,7 +355,7 @@ def main():
 
 			#change contrast and brightness 
 
-			img_contr = gamma_correction(img_filt, g)
+			img_contr = automatic_gamma_correction(img_filt)
 
 			contour = contour_rehaussement(img_contr)
 
