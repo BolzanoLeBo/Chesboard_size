@@ -232,6 +232,16 @@ def line_equation(line_points) :
 	b = y1 - m* x1
 	return [m, b]
 
+def line_equation2(line_points) : 
+	#we do the equation as we invert x and y, it is useful to compare vertical lines 
+	y1, x1, y2, x2 = line_points
+	if x1 == x2 :  #if it is a vertical line 
+		x1 += 0.0000001
+
+	m = (y1 - y2) / (x1 - x2)
+	b = y1 - m* x1
+	return [m, b]
+
 def in_image(x, y, img ) : 
 	lx = img.shape[1]
 	ly = img.shape[0]
@@ -240,6 +250,10 @@ def in_image(x, y, img ) :
  
 def find_all_intersection(img, line_tab) : 
 	tab_intersect = []
+
+	#also count the number of points in the first line
+	nb_point_side = 0
+
 	for i in range (0, len(line_tab)) :
 		#we will find intersection between this line and all the others  
 		m1, b1 = line_equation(line_tab[i])
@@ -257,7 +271,9 @@ def find_all_intersection(img, line_tab) :
 							copy = True 
 					if not copy:
 						tab_intersect.append([x, y])
-	return tab_intersect
+						if i == 0 : 
+							nb_point_side +=1 
+	return tab_intersect, nb_point_side
 
 
 
@@ -279,8 +295,18 @@ def lines_close(l1, l2) :
 
 	#equation for line 2
 	m2, b2 = line_equation(l2)
+	if m1 > 1 and m2 > 1 : 
+		#it is vertical line so comparaing b is no-sense
+		#because b is the intersection with y axis so if line are almost vertical there will be huge difference between there b 
+		#we have to change the sense of the equation 
+		#equation for line 1
+		m1, b1 = line_equation2(l1)
 
-	return abs(b1 - b2) < treshold1 and abs(m1 - m2) < treshold2
+		#equation for line 2
+		m2, b2 = line_equation2(l2)
+		return abs(b1 - b2) < treshold1 and abs(m1 - m2) < treshold2
+	else : 
+		return abs(b1 - b2) < treshold1 and abs(m1 - m2) < treshold2
 
 def draw_lines(source_img, line_tab) : 
 	img = np.copy(source_img)
@@ -292,7 +318,7 @@ def draw_lines(source_img, line_tab) :
 
 
 def main(): 
-	filename = "test.png"
+	filename = "test2.png"
 	img = cv.imread(filename)
 	#img = cv.resize(img, (250,250) )
 
@@ -312,7 +338,7 @@ def main():
 	#creation of the trackbars to change parameters 
 	cv.namedWindow('w')
 	g = automatic_gamma_param(img_filt)
-	cv.createTrackbar("gamma", "w", int(g*100), int(g*200), null)
+	cv.createTrackbar("100*gamma", "w", int(g*100), int(g*200), null)
 	if not sin_removed : 
 		cv.createTrackbar("cannyMin", "w", 50, 100, null)
 		cv.createTrackbar("cannyMax", "w", 170, 200, null)
@@ -341,7 +367,7 @@ def main():
 		if key == ord('l') or init:
 			init = False 
 			
-			g = cv.getTrackbarPos('gamma','w')/100
+			g = cv.getTrackbarPos('100*gamma','w')/100
 			tresh = cv.getTrackbarPos("treshold", "w")
 			treshP = cv.getTrackbarPos("tresholdP", "w")
 			cmin = cv.getTrackbarPos("cannyMin", "w")
@@ -384,13 +410,20 @@ def main():
 			cv.imshow('lines', draw_lines(final_img, line_tab))
 			cv.imshow('linesP', draw_lines(final_img, line_tabP)) 
 
-			intersectP = find_all_intersection(final_img, line_tabP)
+			intersectP, nb_point_side1 = find_all_intersection(final_img, line_tabP)
 			img2 = np.copy(final_img)
 			#
 			for point in intersectP : 
 				cv.circle(img2, (int(point[0]), int(point[1])), 5, (0,255,0), 3)
 			cv.imshow('img2', img2) 
-			print(len(intersectP), len(line_tab))
+
+			nb_point_side2 = int(len(intersectP)/nb_point_side1)
+
+			nb_square_side1 = nb_point_side1 - 1 
+			nb_square_side2 = nb_point_side2 - 1
+			nb_square = nb_square_side2 * nb_square_side1
+
+			print("there is {} squares. {} in one side and {} in the other".format(nb_square, nb_square_side1, nb_square_side2))
 
 			
 		
