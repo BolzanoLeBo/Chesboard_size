@@ -1,55 +1,53 @@
 import numpy as np
 import cv2 as cv
-from matplotlib import pyplot as plt
-from math import *
-from scipy.ndimage.filters import maximum_filter
+import line_and_point_detect as lp
 
 
 # --------------------------NON USED FUNCTIONS-------------------------------------------
 
 
-def corner_detect(input_img, origin_img):
-    # input img is an image in gray variation, and origin img a rgb one
-    img = np.copy(origin_img)
-    corner = cv.cornerHarris(input_img, 2, 3, 0.04)
-    # result is dilated for marking the corners, not important
-    dst = cv.dilate(corner, None)
-    # Threshold for an optimal value, it may vary depending on the image.
-    img[dst > 0.01 * dst.max()] = [0, 0, 255]
-    return img
+# def corner_detect(input_img, origin_img):
+#     # input img is an image in gray variation, and origin img a rgb one
+#     img = np.copy(origin_img)
+#     corner = cv.cornerHarris(input_img, 2, 3, 0.04)
+#     # result is dilated for marking the corners, not important
+#     dst = cv.dilate(corner, None)
+#     # Threshold for an optimal value, it may vary depending on the image.
+#     img[dst > 0.01 * dst.max()] = [0, 0, 255]
+#     return img
 
 
-def avarage_filter(source_img, size):
-    # size of the matrix edge
-    img = np.copy(source_img)
-    # create filter matrix
-    kernel = 1 / (size**2) * np.ones((size, size))
-    # using avarage filter
-    return cv.filter2D(img, -1, kernel)
+# def avarage_filter(source_img, size):
+#     # size of the matrix edge
+#     img = np.copy(source_img)
+#     # create filter matrix
+#     kernel = 1 / (size**2) * np.ones((size, size))
+#     # using avarage filter
+#     return cv.filter2D(img, -1, kernel)
 
 
-def change_contr_bright(img, a, b):
-    # simple contrast and britghtess change
-    img2 = np.copy(img)
-    for y in range(0, img.shape[0]):
-        for x in range(0, img.shape[1]):
-            if a * img2[y][x] + b < 255:
-                # We have to check if we don't go out of the pixel value limit
-                img2[y][x] = ceil(a * img2[y][x] + b)
-            else:
-                img2[y][x] = 255
-    return img2
+# def change_contr_bright(img, a, b):
+#     # simple contrast and britghtess change
+#     img2 = np.copy(img)
+#     for y in range(0, img.shape[0]):
+#         for x in range(0, img.shape[1]):
+#             if a * img2[y][x] + b < 255:
+#                 # We have to check if we don't go out of the pixel value limit
+#                 img2[y][x] = ceil(a * img2[y][x] + b)
+#             else:
+#                 img2[y][x] = 255
+#     return img2
 
 
-def linear_streching(gray_img, a_min, a_max):
-    img = np.copy(gray_img)
-    a_low = np.min(img)  # the minimum value of pixel brightness
-    a_high = np.max(img)  # the maximum value of pixel brightness
-    for y in range(0, img.shape[0]):
-        for x in range(0, img.shape[1]):
-            a = img[y][x]
-            img[y][x] = a_min + (a - a_low) * (a_max - a_min) / (a_high - a_low)
-    return img
+# def linear_streching(gray_img, a_min, a_max):
+#     img = np.copy(gray_img)
+#     a_low = np.min(img)  # the minimum value of pixel brightness
+#     a_high = np.max(img)  # the maximum value of pixel brightness
+#     for y in range(0, img.shape[0]):
+#         for x in range(0, img.shape[1]):
+#             a = img[y][x]
+#             img[y][x] = a_min + (a - a_low) * (a_max - a_min) / (a_high - a_low)
+#     return img
 
 
 # -------------------------------------------------------------------------------------------
@@ -85,66 +83,6 @@ def contour_rehaussement(source_img):
     img_filt = cv.filter2D(source_img, -1, laplace)
 
     return img + img_filt
-
-
-def line_coord_change(r, theta):
-    # change r theta cordonate to a (start, end) point
-    # We multiply by 1000 to simulate infinite line compared to the size of the image
-    a = cos(theta)
-    b = sin(theta)
-    y0 = b * r
-    x0 = a * r
-    # we find to far away points in the line
-    x1 = int(x0 - 1000 * b)
-    y1 = int(y0 + 1000 * a)
-    x2 = int(x0 + 1000 * b)
-    y2 = int(y0 - 1000 * a)
-
-    return [x1, y1, x2, y2]
-
-
-def lines_detector(img_edge, tresh):
-    line_tab = []
-    line_tab.append([1, 1, 0, 0])
-
-    lines = cv.HoughLines(img_edge, 1, pi / 180, tresh)
-
-    for r_theta in lines:
-        arr = np.array(r_theta[0], dtype=np.float64)
-        r, theta = arr
-        line_coord = line_coord_change(r, theta)
-        copy = False
-        for line in line_tab:
-            if lines_close(line_coord, line):
-                copy = True
-        if not copy:
-            line_tab.append(line_coord)
-
-    return line_tab
-
-
-def lines_detector_P(img_edge, tresh, min_Length, max_Gap):
-    # Use a different dfonction for detecing lines
-
-    line_tab = []
-    lines = cv.HoughLinesP(
-        img_edge,  # Input edge image
-        1,  # Distance resolution in pixels
-        np.pi / 180,  # Angle resolution in radians
-        threshold=tresh,  # Min number of votes for valid line
-        minLineLength=min_Length,  # Min allowed length of line
-        maxLineGap=max_Gap,  # Max allowed gap between line for joining them
-    )
-
-    for point in lines:
-        x1, y1, x2, y2 = point[0]
-        copy = False
-        for line in line_tab:
-            if lines_close([x1, y1, x2, y2], line):
-                copy = True
-        if not copy:
-            line_tab.append([x1, y1, x2, y2])
-    return line_tab
 
 
 def average_color(img):
@@ -212,81 +150,21 @@ def remove_sinusoidal_noise(img):
     return [img_back, removed]
 
 
-def line_equation(line_points):
-    x1, y1, x2, y2 = line_points
-    if x1 == x2:  # if it is a vertical line
-        x1 += 0.0000001
-
-    m = (y1 - y2) / (x1 - x2)
-    b = y1 - m * x1
-    return [m, b]
-
-
-def in_image(x, y, img):
-    lx = img.shape[1]
-    ly = img.shape[0]
-
-    return (x < lx and x > 0) and (y < ly and y > 0)
-
-
-def find_all_intersection(img, line_tab):
-    tab_intersect = []
-    for i in range(0, len(line_tab)):
-        # we will find intersection between this line and all the others
-        m1, b1 = line_equation(line_tab[i])
-        for j in range(i, len(line_tab)):
-            # equation for others lines
-            m2, b2 = line_equation(line_tab[j])
-            if (m1 - m2) != 0:
-                x = (b2 - b1) / (m1 - m2)
-                y = m1 * x + b1
-
-                if in_image(x, y, img):
-                    copy = False
-                    for point in tab_intersect:
-                        if point_close([x, y], point):
-                            copy = True
-                    if not copy:
-                        tab_intersect.append([x, y])
-    return tab_intersect
-
-    # define a null callback function for Trackbar
-
-
 def null(x):
     pass
 
 
-def point_close(p1, p2):
-    treshold = 20
-    return sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2) < treshold
-
-
-def lines_close(l1, l2):
-    treshold1 = 10  # the distance between the two interesection with the y axis
-    treshold2 = 35  # difference between the
-
-    # equation for line 1
-    m1, b1 = line_equation(l1)
-
-    # equation for line 2
-    m2, b2 = line_equation(l2)
-
-    return abs(b1 - b2) < treshold1 and abs(m1 - m2) < treshold2
-
-
-def draw_lines(source_img, line_tab):
-    img = np.copy(source_img)
-    for line in line_tab:
-        x1, y1, x2, y2 = line
-        cv.line(img, (x1, y1), (x2, y2), (0, 0, 255), 1)
-    return img
-
-
 def main():
-    filename = "test.png"
+    # filename = "Chessboard_00451_2.png" # sin
+    filename = "Chessboard_00451.png"  # normal
+    # filename = "Chessboard_0481_0.png" # noise
+    # filename = "Chessboard_0481.png"
+    # filename = "Chessboard_0511.png"
+    # filename = "Chessboard_0541.png"
+    # filename = "Chessboard_00601.png"
+    # filename = "Chessboard0631.png"
+
     img = cv.imread(filename)
-    # img = cv.resize(img, (250,250) )
 
     final_img = np.copy(img)
 
@@ -361,13 +239,13 @@ def main():
 
             cv.imshow("edges", img_edge)
 
-            line_tabP = lines_detector_P(img_edge, hmin, hmax, treshP)
-            line_tab = lines_detector(img_edge, tresh)
+            line_tabP = lp.lines_detector_P(img_edge, hmin, hmax, treshP)
+            line_tab = lp.lines_detector(img_edge, tresh)
 
-            cv.imshow("lines", draw_lines(final_img, line_tab))
-            cv.imshow("linesP", draw_lines(final_img, line_tabP))
+            cv.imshow("lines", lp.draw_lines(final_img, line_tab))
+            cv.imshow("linesP", lp.draw_lines(final_img, line_tabP))
 
-            intersectP = find_all_intersection(final_img, line_tabP)
+            intersectP = lp.find_all_intersection(final_img, line_tabP)
             img2 = np.copy(final_img)
             #
             for point in intersectP:

@@ -13,10 +13,16 @@ gaussian = cv2.GaussianBlur(gray, (15, 15), 0)
 # Apply Laplacian of Gaussian filter
 log = cv2.Laplacian(gaussian, cv2.CV_8U, ksize=5)
 
+img_cp = np.copy(img)
+img_filt = cv2.filter2D(img_cp, -1, log)
+
+
 # Show the original, Gaussian, and Laplacian of Gaussian images
 cv2.imshow("Original", img)
 cv2.imshow("Gaussian", gaussian)
 cv2.imshow("Laplacian of Gaussian", log)
+cv2.imshow("Overlay", img_filt)
+
 
 # Wait for key press and close windows
 cv2.waitKey(0)
