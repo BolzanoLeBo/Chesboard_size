@@ -1,14 +1,19 @@
 # Chesboard_size
 
+## Usage 
+
+Press "L" to recalculate images after change parameters.
+
+## Features
+
 Done
 - Detect lines with 2 Hough functions 
 - Parameter can be changed on a window 
 - Detect intersection of the lines 
 - periodic noise filter
 
-
 TO DO : 
-- Add salt and pepper noise filter 
+- Add salt and pepper noise filter (median)
 - Find good parameters depending on the image
 
 ## Installation
