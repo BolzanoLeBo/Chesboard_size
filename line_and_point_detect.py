@@ -88,6 +88,9 @@ def lines_close(l1, l2):
     else:
         return abs(b1 - b2) < treshold1 and abs(m1 - m2) < treshold2
 
+def line_norm(line) :
+    x1, y1, x2, y2 = line 
+    return sqrt((x1-x2)**2 + (y1-y2)**2)
 
 def draw_lines(source_img, line_tab):
     img = np.copy(source_img)
@@ -137,6 +140,7 @@ def lines_detector_P(img_edge, tresh, min_Length, max_Gap):
     # Use a different dfonction for detecing lines
 
     line_tab = []
+
     lines = cv.HoughLinesP(
         img_edge,  # Input edge image
         1,  # Distance resolution in pixels
@@ -149,9 +153,17 @@ def lines_detector_P(img_edge, tresh, min_Length, max_Gap):
     for point in lines:
         x1, y1, x2, y2 = point[0]
         copy = False
+        #line = point[0]
         for line in line_tab:
             if lines_close([x1, y1, x2, y2], line):
                 copy = True
-        if not copy:
+                if copy and line_norm([x1,y1,x2,y2]) >= line_norm(line) : 
+                    #we want to keep the longest o,e 
+                    print(line_tab)
+                    line_tab.remove(line)
+                    print(line_tab)
+                    copy = False
+
+        if not copy :
             line_tab.append([x1, y1, x2, y2])
     return line_tab
